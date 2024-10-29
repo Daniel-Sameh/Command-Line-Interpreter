@@ -20,6 +20,11 @@ public class CLI{
         commandRegistry.put("rm", this::removeFile);
         commandRegistry.put("cat", this::displayFileContents);
     }
+    private static void removeLastPrintedLine(){
+        System.out.print("\033[1A");
+        System.out.print("\033[2K");
+        System.out.flush();
+    }
     public String getCurrentDirectory(){
         return currentDirectory.toString();
     }
@@ -41,9 +46,12 @@ public class CLI{
                 paginateOutputMore(prevInput);
                 return "";
             }
+            else if (i < pipelineSeparatedCommand.length - 1 && (pipelineSeparatedCommand[i + 1].trim().equals("less"))){
+                paginateOutputLess(prevInput);
+                return "";
+            }
         }
         return prevInput;
-
     }
     private String executeSingleCommand(String cmd, String[] args, String input) {
         Function<String[], String> commandFunction = commandRegistry.get(cmd);
@@ -57,7 +65,7 @@ public class CLI{
             return "Error executing command: " + cmd + " - " + e.getMessage();
         }
     }
-    private void paginateOutputMore(String output) {
+        private void paginateOutputMore(String output) {
         Scanner scanner = new Scanner(System.in);
         String[] lines = output.split("\n");
         int linesPerPage = 10; // Number of lines to display per page
@@ -74,24 +82,36 @@ public class CLI{
             if (currentLine < lines.length) {
                 System.out.print("\u001B[47m\u001B[30m-- More -- (Press Enter to continue, 'q' to quit): \u001B[0m");
                 String input = scanner.nextLine();
-                // Clear the "-- More --" line by overwriting with spaces
-//                System.out.print("\033[2A");
-//                System.out.print("\r"); // Move to the start of the line
-//                System.out.print("                                        "); // Print spaces to clear the line
-//                System.out.print("\r"); // Move back to the start of the line
-
-
-//                System.out.print(String.format("\033[%dA",2)); // Move up
-//                System.out.print("\033[2K");
-                System.out.print("\033[H\033[2J");
-                System.out.flush();
-//                System.out.print(String.format("\033[2J"));
+                removeLastPrintedLine();
                 if (input.equalsIgnoreCase("q")) {
                     break;
                 }
             }
             ++currentLine;
         }
+    }
+    private void paginateOutputLess(String output){
+        Scanner scanner = new Scanner(System.in);
+        String[] lines = output.split("\n");
+        int linesPerPage = (lines.length < 10 ? lines.length : 10);
+        int currentLine = linesPerPage;
+        for (int i = 0; i < linesPerPage; i++)
+            System.out.println(lines[i]);
+        while (currentLine < lines.length){
+            String input = scanner.nextLine();
+            if (input.equalsIgnoreCase("q")) {
+                break;
+            }
+            if (input.equals("\\033[A")){
+                if (currentLine > 0) {
+                    removeLastPrintedLine();
+                    currentLine--;
+                }
+            }
+            else if (input.equals("\\033[B")){
+                System.out.println(lines[currentLine++]);
+            }
+        }   
     }
     private String changeDirectory(String[] args){
         if (args.length == 0){
@@ -138,9 +158,6 @@ public class CLI{
         catch (IOException e){
             return ERROR_MESSAGE + e;
         }
-    }
-    private String piplineMore(String file){
-        return "Not implemented";
     }
     private String createNewDirectory(String[] args){
         if (args.length == 0) {
