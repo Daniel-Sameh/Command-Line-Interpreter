@@ -4,6 +4,13 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.function.Function;
 
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.Binding;
+import org.jline.reader.Reference;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
+
 public class CLI{
     private static String ERROR_MESSAGE = "An unexpceted error occured: ";
     private final Map<String, Function<String[], String>> commandRegistry = new HashMap<>();
@@ -39,6 +46,9 @@ public class CLI{
             // If the next command is "more" or "less", paginate the output
             if (i < pipelineSeparatedCommand.length - 1 &&  (pipelineSeparatedCommand[i + 1].trim().equals("more"))) {
                 paginateOutputMore(prevInput);
+                return "";
+            }else if (i<pipelineSeparatedCommand.length-1 && (pipelineSeparatedCommand[i+1].trim().equals("less"))){
+                paginateOutputLess(prevInput);
                 return "";
             }
         }
@@ -83,7 +93,7 @@ public class CLI{
 
 //                System.out.print(String.format("\033[%dA",2)); // Move up
 //                System.out.print("\033[2K");
-                System.out.print("\033[H\033[2J");
+//                System.out.print("\033[H\033[2J");
                 System.out.flush();
 //                System.out.print(String.format("\033[2J"));
                 if (input.equalsIgnoreCase("q")) {
@@ -93,16 +103,33 @@ public class CLI{
             ++currentLine;
         }
     }
+    private void paginateOutputLess(String output){
+        Scanner scanner = new Scanner(System.in);
+        String[] lines = output.split("\n");
+        int linesPerPage = 10;
+        int currentLine = 0;
+
+    }
     private String changeDirectory(String[] args){
         if (args.length == 0){
             return "Usage: cd <directory>";
         }
-        Path newPath = currentDirectory.resolve(args[0]).normalize();
+        if (args[0].charAt(0)=='.'&&args[0].length()==args[0].chars().filter(c -> c == '.').count()&& args[0].length()!=2){
+            return "Usage: cd <directory>";
+        }
+        String path = "";
+        int idx=0;
+        while (idx<args.length &&args[idx]!="|"){
+            path += args[idx]+" ";
+            ++idx;
+        }
+        path = path.trim();
+        Path newPath = currentDirectory.resolve(path).normalize();
         if (Files.exists(newPath) && Files.isDirectory(newPath)){
             currentDirectory = newPath;
-            return "Directory changed: " + args[0];
+            return "Directory changed: " + path;
         }
-        return "Directory not found: " + args[0];
+        return "Directory not found: " + path;
     }
 
     private String listDirectory(String[] args){
