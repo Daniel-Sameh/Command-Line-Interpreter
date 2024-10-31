@@ -42,6 +42,8 @@ Ensure you have [Java JDK](https://www.oracle.com/java/technologies/downloads/#j
 | `rm`   | Deletes the specified file.|
 | `cat`   | Displays the contents of the specified file.|
 | `help`   | Displays a help message with a list of available commands.|
+| `>`   | Redirects the output of a command to a specified file. Creates the file if it doesn’t exist; if it does, the file’s original content is replaced. Example: `ls > test.txt`|
+| `>>`   | Appends the output of a command to a specified file, creating it if it doesn’t exist. Example: `ls >> test.txt`|
 
 ## Pipeline Filters
 
