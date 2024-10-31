@@ -4,16 +4,10 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.function.Function;
 
-import org.jline.reader.LineReader;
-import org.jline.reader.LineReaderBuilder;
-import org.jline.reader.Binding;
-import org.jline.reader.Reference;
-import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
-
 public class CLI{
-    private static String ERROR_MESSAGE = "An unexpceted error occured: ";
+    private static String ERROR_MESSAGE = "An unexpceted error occured";
     private final Map<String, Function<String[], String>> commandRegistry = new HashMap<>();
+    private final Map<String, Function<String, String>> piplelineFilterRegistery = new HashMap<>();
     private Path currentDirectory;
     public CLI(){
         currentDirectory = Paths.get("").toAbsolutePath();
@@ -26,56 +20,94 @@ public class CLI{
         commandRegistry.put("mv", this::moveOrRename);
         commandRegistry.put("rm", this::removeFile);
         commandRegistry.put("cat", this::displayFileContents);
+
+        piplelineFilterRegistery.put("less", this::paginateOutputLess);
+        piplelineFilterRegistery.put("more", this::paginateOutputMore);
+        piplelineFilterRegistery.put("uniq", this::getUniqe);
     }
+    // Utillity Functions
     private static void removeLastPrintedLine(){
         System.out.print("\033[1A");
         System.out.print("\033[2K");
         System.out.flush();
     }
+    private static String writeToFile(String fileName, String content, Boolean append){
+        try{
+            FileWriter writer = new FileWriter(fileName, append);
+            writer.write(content);
+            writer.close();
+        }
+        catch (IOException e){
+            return decorateErrorMessage("Error writing to", fileName);
+        }
+        return "";
+    }
+    private static String decorateErrorMessage(String firstPart, String secondPart){
+        return "\u001B[31mError! " + firstPart + ": \u001B[0m" +"\u001B[33m"+ secondPart +"\u001B[0m";
+    }
+    
     public String getCurrentDirectory(){
         return currentDirectory.toString();
     }
-    public String executeCommand(String command){
-        String[] pipelineSeparatedCommand = command.split("\\|");
-        String prevInput = "";
-
-        for (int i = 0; i < pipelineSeparatedCommand.length; i++) {
-            String pipelineCommand = pipelineSeparatedCommand[i].trim();
-            String[] args = pipelineCommand.split("\\s+");
-            String cmd = args[0];
-            args = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : new String[0];
-
-            // Execute each command
-            prevInput = executeSingleCommand(cmd, args, prevInput);
-
-            // If the next command is "more" or "less", paginate the output
-            if (i < pipelineSeparatedCommand.length - 1 &&  (pipelineSeparatedCommand[i + 1].trim().equals("more"))) {
-                paginateOutputMore(prevInput);
-                return "";
-            }else if (i<pipelineSeparatedCommand.length-1 && (pipelineSeparatedCommand[i+1].trim().equals("less"))){
-                paginateOutputLess(prevInput);
-                return "";
+    
+    public String executeCommand(String commands){
+        String[] tokens = commands.split("\\s+");
+        ArrayList<String> modifiedTokens = new ArrayList<>();
+        modifiedTokens.add("");
+        for (String token: tokens){
+            if (token.equals("|") || token.equals(">") || token.equals(">>")){
+                modifiedTokens.add(token);
+                modifiedTokens.add("");
             }
-            else if (i < pipelineSeparatedCommand.length - 1 && (pipelineSeparatedCommand[i + 1].trim().equals("less"))){
-                paginateOutputLess(prevInput);
-                return "";
+            else {
+                String cur = modifiedTokens.getLast() + " " + token;
+                modifiedTokens.removeLast();
+                modifiedTokens.add(cur);
             }
         }
-        return prevInput;
+        String prevOutput = executeSingleCommand(modifiedTokens.get(0).trim().split("\\s+"));
+        for (int i = 1; i < modifiedTokens.size(); i += 2){
+            String token = modifiedTokens.get(i).trim();
+            String right = (i + 1 < modifiedTokens.size() ? modifiedTokens.get(i + 1) : "");
+            right = right.trim();
+            if (token.equals("|")){
+                prevOutput = applyPipelineFilter(prevOutput, right);
+            } else if (token.equals(">")){
+                prevOutput = writeToFile(right, prevOutput, false);
+            } else if (token.equals(">>")){
+                prevOutput = writeToFile(right, prevOutput, true);
+            }
+        }
+        return prevOutput;
     }
-    private String executeSingleCommand(String cmd, String[] args, String input) {
+    private String executeSingleCommand(String[] args) {
+        String cmd = args[0].toLowerCase().trim();
+        args = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : new String[0];
         Function<String[], String> commandFunction = commandRegistry.get(cmd);
         if (commandFunction == null) {
-            return "\u001B[31mError! Unknown command: \u001B[0m" +"\u001B[33m"+ cmd+"\u001B[0m";
+            return decorateErrorMessage("Unknown command", cmd);
         }
 
         try {
             return commandFunction.apply(args);
         } catch (Exception e) {
-            return "Error executing command: " + cmd + " - " + e.getMessage();
+            return decorateErrorMessage("Error executing command '" + cmd + "'", e.getMessage());
         }
     }
-        private void paginateOutputMore(String output) {
+    private String applyPipelineFilter(String prevOutput, String filter){
+        Function<String, String> pipileFunction = piplelineFilterRegistery.get(filter);
+        if (pipileFunction == null) {
+            return decorateErrorMessage("Unknown filter", filter);
+        }
+        try {
+            return pipileFunction.apply(prevOutput);
+        } catch (Exception e) {
+            return decorateErrorMessage("Error applying filter '" + filter + "'", e.getMessage());
+        }
+    };
+    
+    // command | more
+    private String paginateOutputMore(String output) {
         Scanner scanner = new Scanner(System.in);
         String[] lines = output.split("\n");
         int linesPerPage = 10; // Number of lines to display per page
@@ -99,8 +131,11 @@ public class CLI{
             }
             ++currentLine;
         }
+        scanner.close();
+        return "";
     }
-    private void paginateOutputLess(String output){
+    // command | less
+    private String paginateOutputLess(String output){
         Scanner scanner = new Scanner(System.in);
         String[] lines = output.split("\n");
         int linesPerPage = (lines.length < 10 ? lines.length : 10);
@@ -109,42 +144,52 @@ public class CLI{
             System.out.println(lines[i]);
         while (currentLine < lines.length){
             String input = scanner.nextLine();
+            removeLastPrintedLine();
             if (input.equalsIgnoreCase("q")) {
                 break;
             }
-            if (input.equals("\\033[A")){
+            if (input.equals("w")){
                 if (currentLine > 0) {
+                    removeLastPrintedLine();
                     removeLastPrintedLine();
                     currentLine--;
                 }
             }
-            else if (input.equals("\\033[B")){
+            else if (input.equals("s")){
                 System.out.println(lines[currentLine++]);
             }
-        }   
+        }
+        scanner.close();
+        return "";
     }
+    // command | uniq
+    private String getUniqe(String ouput){
+        Set<String> distinctValues = new HashSet<>(Arrays.asList(ouput.split("\n")));
+        String result = "";
+        for (String s: distinctValues){
+            result += s;
+        }
+        return result;
+    }
+    // cd
     private String changeDirectory(String[] args){
-        if (args.length == 0){
-            return "Usage: cd <directory>";
+
+        if (
+            args.length == 0 
+            || args[0].charAt(0) == '.' 
+            && args[0].length() == args[0].chars().filter(c -> c == '.').count() 
+            && args[0].length() != 2
+        ){
+            return decorateErrorMessage("Usage", "cd <directory>");
         }
-        if (args[0].charAt(0)=='.'&&args[0].length()==args[0].chars().filter(c -> c == '.').count()&& args[0].length()!=2){
-            return "Usage: cd <directory>";
-        }
-        String path = "";
-        int idx=0;
-        while (idx<args.length &&args[idx]!="|"){
-            path += args[idx]+" ";
-            ++idx;
-        }
-        path = path.trim();
-        Path newPath = currentDirectory.resolve(path).normalize();
+        Path newPath = currentDirectory.resolve(args[0]).normalize();
         if (Files.exists(newPath) && Files.isDirectory(newPath)){
             currentDirectory = newPath;
-            return "Directory changed: " + path;
+            return "Directory changed: " + args[0];
         }
-        return "Directory not found: " + path;
+        return decorateErrorMessage("Directory not found", args[0]);
     }
-
+    // ls
     private String listDirectory(String[] args){
         Boolean hidden = false, reversed = false;
         for (String arg: args){
@@ -176,32 +221,34 @@ public class CLI{
 
         }
         catch (IOException e){
-            return ERROR_MESSAGE + e;
+            return decorateErrorMessage(ERROR_MESSAGE, e.getMessage());
         }
     }
+    // mkdir
     private String createNewDirectory(String[] args){
         if (args.length == 0) {
-            return "Usage: mkdir <directory>";
+            return decorateErrorMessage("Usage", "mkdir <directory>");
         }
         Path newDir = currentDirectory.resolve(args[0]);
         try{
             Files.createDirectories(newDir);
         }
         catch(FileAlreadyExistsException e){
-            return "File already exists.";
+            return decorateErrorMessage("File already exists", newDir.toString());
         }
         catch(IOException e){
             return ERROR_MESSAGE + e;
         }
         return "Directory created: " + newDir;
     }
+    // rmdir
     private String removeDirectory(String[] args) {
         if (args.length == 0) {
-            return "Usage: rmdir <directory>";
+            return decorateErrorMessage("Usage", "rmdir <directory>");
         }
         Path dir = currentDirectory.resolve(args[0]);
         if (!Files.exists(dir) || !Files.isDirectory(dir)){
-            return "Directory not found: " + dir;
+            return decorateErrorMessage("Directory not found", dir.toString());
         }
         try{
             Files.deleteIfExists(dir);
@@ -211,30 +258,32 @@ public class CLI{
         }
         return "Directory removed: " + dir;
     }
+    // touch
     private String createNewFile(String[] args){
         if (args.length == 0) {
-            return "Usage: touch <file>";
+            return decorateErrorMessage("Usage", "touch <file>");
         }
         Path file = currentDirectory.resolve(args[0]);
         try{
             Files.createFile(file);
         }
         catch (FileAlreadyExistsException e){
-            return "File already exists: " + file;
+            return decorateErrorMessage("File already exists", file.toString());
         }
         catch (IOException e){
             return ERROR_MESSAGE + e;
         }
         return "File created: " + file;
     }
+    // mv
     private String moveOrRename(String[] args){
         if (args.length < 2) {
-            return "Usage: mv <source> <destination>";
+            return decorateErrorMessage("Usage", "mv <source> <destination>");
         }
         Path source = currentDirectory.resolve(args[0]);
         Path destination = currentDirectory.resolve(args[1]);
         if (!Files.exists(source)){
-            return "Source not found: " + args[0];
+            return decorateErrorMessage("Source not found", source.toString());
         }
         if (Files.isDirectory(destination)) {
             destination = destination.resolve(source.getFileName());
@@ -242,26 +291,31 @@ public class CLI{
         try {
             Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            return "Error moving/renaming: " + e.getMessage();
+            return decorateErrorMessage("Error moving/renaming", e.getMessage());
         }
         return "Moved/Renamed: " + source + " -> " + destination;
     }
+    // rm
     private String removeFile(String[] args) {
         if (args.length == 0) {
-            return "Usage: rm <file>";
+            return decorateErrorMessage("Usage", "rm <file>");
         }
         Path file = currentDirectory.resolve(args[0]);
+        if (!Files.exists(file)){
+            return decorateErrorMessage("File not found", file.toString());
+        }
         try{
             Files.deleteIfExists(file);
         }
         catch (IOException e){
-            return ERROR_MESSAGE + e;
+            return decorateErrorMessage("Error removing file/directory", e.getMessage());
         }
         return "Removed: " + file;
     }
+    // cat
     private String displayFileContents(String[] args) {
         if (args.length == 0) {
-            return "Usage: cat <file>";
+            return decorateErrorMessage("Usage", "cat <file>");
         }
         Path file = currentDirectory.resolve(args[0]);
         try{
@@ -272,6 +326,6 @@ public class CLI{
         catch (IOException e){
             return ERROR_MESSAGE + e;
         }
-        return "File not found: " + args[0];
+        return decorateErrorMessage("File not found", file.toString());
     }
 }
