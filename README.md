@@ -47,8 +47,8 @@ Ensure you have [Java JDK](https://www.oracle.com/java/technologies/downloads/#j
 
 | Filter | Description |
 |---------|-------------|
-| `less`   | Displays output one screen at a time.|
-| `more`   | Displays output one line at a time.|
+| `more`   | Displays output one chunk at a time.|
+| `less`   | Displays output one chunk at a time with the ability to go up and down one line.|
 | `uniq`   | Filters out repeated lines.|
 | `grep`   | Searches for a specified pattern in the output.|
 
