@@ -193,7 +193,6 @@ public class CLI{
             if (input.equals("w")){
                 if (currentLine > 0) {
                     removeLastPrintedLine();
-                    removeLastPrintedLine();
                     currentLine--;
                 }
             }
@@ -230,21 +229,21 @@ public class CLI{
     }
     // cd
     private String changeDirectory(String[] args){
-
         if (
-            args.length != 1
-            || args[0].charAt(0) == '.' 
+            args.length <= 0
+            || args[0].charAt(0) == '.'
             && args[0].length() == args[0].chars().filter(c -> c == '.').count() 
             && args[0].length() != 2
         ){
             return decorateErrorMessage("Usage", "cd <directory>");
         }
-        Path newPath = currentDirectory.resolve(args[0]).normalize();
+        String fileName= String.join(" ",args).trim();
+        Path newPath = currentDirectory.resolve(fileName).normalize();
         if (Files.exists(newPath) && Files.isDirectory(newPath)){
             currentDirectory = newPath;
-            return "Directory changed: " + args[0];
+            return "Directory changed: " + fileName;
         }
-        return decorateErrorMessage("Directory not found", args[0]);
+        return decorateErrorMessage("Directory not found", fileName);
     }
     // ls
     private String listDirectory(String[] args){
@@ -377,7 +376,8 @@ public class CLI{
         Path file = currentDirectory.resolve(args[0]);
         try{
             if (Files.exists(file)) {
-                return Files.readString(file);
+                String output = Files.readString(file);
+                return output;
             }
         }
         catch (IOException e){
