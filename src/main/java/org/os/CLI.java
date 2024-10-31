@@ -11,7 +11,8 @@ import java.util.regex.Matcher;
 public class CLI{
     private static String ERROR_MESSAGE = "An unexpceted error occured";
     private final Map<String, Function<String[], String>> commandRegistry = new HashMap<>();
-    private final Map<String, BiFunction<String, String, String>> piplelineFilterRegistery = new HashMap<>();
+    private final Map<String, String> commandDescription = new HashMap<>();
+    private final Map<String, BiFunction<String, String, String>> pipelineFilterRegistry = new HashMap<>();
     private Path currentDirectory;
     public CLI(){
         currentDirectory = Paths.get("").toAbsolutePath();
@@ -24,12 +25,39 @@ public class CLI{
         commandRegistry.put("mv", this::moveOrRename);
         commandRegistry.put("rm", this::removeFile);
         commandRegistry.put("cat", this::displayFileContents);
+        commandRegistry.put("help", this::helpDisplay);
 
-        piplelineFilterRegistery.put("less", this::paginateOutputLess);
-        piplelineFilterRegistery.put("more", this::paginateOutputMore);
-        piplelineFilterRegistery.put("uniq", this::getUniqe);
-        piplelineFilterRegistery.put("grep", this::filterWithPattern);
+        commandDescription.put("pwd", "Usage: pwd\n     Displays the current working directory.");
+        commandDescription.put("cd", "Usage: cd <directory>\n     Changes the current directory to <directory>.");
+        commandDescription.put("ls", "Usage: ls\n     Lists all files and directories in the current directory.");
+        commandDescription.put("mkdir", "Usage: mkdir <directory>\n     Creates a new directory named <directory>.");
+        commandDescription.put("rmdir", "Usage: rmdir <directory>\n     Removes the specified directory if it is empty.");
+        commandDescription.put("touch", "Usage: touch <filename>\n     Creates a new empty file named <filename>.");
+        commandDescription.put("mv", "Usage: mv <source> <destination>\n     Moves or renames a file or directory.");
+        commandDescription.put("rm", "Usage: rm <filename>\n     Deletes the specified file.");
+        commandDescription.put("cat", "Usage: cat <filename>\n     Displays the contents of the specified file.");
+        commandDescription.put("help", "Usage: help\n     Displays this help message with a list of available commands.");
+
+
+        pipelineFilterRegistry.put("less", this::paginateOutputLess);
+        pipelineFilterRegistry.put("more", this::paginateOutputMore);
+        pipelineFilterRegistry.put("uniq", this::getUniqe);
+        pipelineFilterRegistry.put("grep", this::filterWithPattern);
     }
+
+    private String helpDisplay(String[] strings) {
+        if (strings.length>0){
+            return decorateErrorMessage("","Too many arguments");
+        }
+        // Build the help message with available commands
+        StringBuilder helpMessage = new StringBuilder("Available commands:\n");
+        for (String command : commandRegistry.keySet()) {
+            helpMessage.append("- ").append(command).append("\n     ").append(commandDescription.get(command)).append("\n");
+        }
+
+        return helpMessage.toString();
+    }
+
     // Utillity Functions
     private static void removeLastPrintedLine(){
         System.out.print("\033[1A");
@@ -54,9 +82,7 @@ public class CLI{
     private static String decorateErrorMessage(String firstPart, String secondPart){
         return "\u001B[31mError! " + firstPart + ": \u001B[0m" +"\u001B[33m"+ secondPart +"\u001B[0m";
     }
-    
 
-    
     public String executeCommand(String commands){
         String[] tokens = commands.split("\\s+");
         ArrayList<String> modifiedTokens = new ArrayList<>();
@@ -105,7 +131,7 @@ public class CLI{
     }
     private String applyPipelineFilter(String prevOutput, String filter){
         var filteredFilter= filter.split("\\s+");
-        BiFunction<String, String, String> pipileFunction = piplelineFilterRegistery.get(filteredFilter[0]);
+        BiFunction<String, String, String> pipileFunction = pipelineFilterRegistry.get(filteredFilter[0]);
         if (pipileFunction == null) {
             return decorateErrorMessage("Unknown filter", filter);
         }

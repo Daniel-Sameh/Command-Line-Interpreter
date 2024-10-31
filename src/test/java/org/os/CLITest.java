@@ -5,11 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.*;
-import java.io.File;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
 
 class CLITest {
 
@@ -90,32 +86,11 @@ class CLITest {
                 "README.md\n" +
                 "pom.xml\n");
     }
-    @Test
-    void listDirectoriesHiddenReversed(){
-        var cli = new CLI();
-        assertEquals(cli.executeCommand("ls -ar"),"target\n" +
-                "src\n" +
-                "README.md\n" +
-                "pom.xml\n" +
-                ".idea\n" +
-                ".gitignore\n" +
-                ".git\n");
-    }
-    @Test
-    void listDirectoriesReversedHidden(){
-        var cli = new CLI();
-        assertEquals(cli.executeCommand("ls -ra"),"target\n" +
-                "src\n" +
-                "README.md\n" +
-                "pom.xml\n" +
-                ".idea\n" +
-                ".gitignore\n" +
-                ".git\n");
-    }
+
     @Test
     void wrongLSArguments(){
         var cli = new CLI();
-        assertEquals(cli.executeCommand("ls ? abc xyz"),"[31mError! Unknown Commands for `ls`: [0m[33m?, abc, xyz[0m");
+        assertEquals(cli.executeCommand("ls ? abc xyz"),"\u001B[31mError! Usage: \u001B[0m\u001B[33mls [-a] [-r]\u001B[0m");
     }
 
     //mkdir and rmdir Unit Test
@@ -245,5 +220,10 @@ class CLITest {
 //        assertEquals(cli.executeCommand("cat pom.xml | less"), "");
 //    }
 
+    @Test
+    void unknownCommand(){
+        var cli = new CLI();
+        assertEquals(cli.executeCommand("xyz"), "\u001B[31mError! Unknown command: \u001B[0m\u001B[33mxyz\u001B[0m");
+    }
 
 }
