@@ -175,7 +175,7 @@ public class CLI{
     private String changeDirectory(String[] args){
 
         if (
-            args.length == 0 
+            args.length != 1
             || args[0].charAt(0) == '.' 
             && args[0].length() == args[0].chars().filter(c -> c == '.').count() 
             && args[0].length() != 2
@@ -197,8 +197,8 @@ public class CLI{
                 hidden = true;
             else if (arg.equals("-r"))
                 reversed = true;
-            else if (arg.equals("-ar") || arg.equals("-ra"))
-                hidden = reversed = true;
+            else 
+                return decorateErrorMessage("Usage", "ls [-a] [-r]");
         }
         try{
             DirectoryStream<Path> stream = Files.newDirectoryStream(currentDirectory);
@@ -226,7 +226,7 @@ public class CLI{
     }
     // mkdir
     private String createNewDirectory(String[] args){
-        if (args.length == 0) {
+        if (args.length != 1) {
             return decorateErrorMessage("Usage", "mkdir <directory>");
         }
         Path newDir = currentDirectory.resolve(args[0]);
@@ -243,7 +243,7 @@ public class CLI{
     }
     // rmdir
     private String removeDirectory(String[] args) {
-        if (args.length == 0) {
+        if (args.length != 1) {
             return decorateErrorMessage("Usage", "rmdir <directory>");
         }
         Path dir = currentDirectory.resolve(args[0]);
@@ -260,7 +260,7 @@ public class CLI{
     }
     // touch
     private String createNewFile(String[] args){
-        if (args.length == 0) {
+        if (args.length != 1) {
             return decorateErrorMessage("Usage", "touch <file>");
         }
         Path file = currentDirectory.resolve(args[0]);
@@ -277,7 +277,7 @@ public class CLI{
     }
     // mv
     private String moveOrRename(String[] args){
-        if (args.length < 2) {
+        if (args.length != 2) {
             return decorateErrorMessage("Usage", "mv <source> <destination>");
         }
         Path source = currentDirectory.resolve(args[0]);
@@ -297,7 +297,7 @@ public class CLI{
     }
     // rm
     private String removeFile(String[] args) {
-        if (args.length == 0) {
+        if (args.length != 1) {
             return decorateErrorMessage("Usage", "rm <file>");
         }
         Path file = currentDirectory.resolve(args[0]);
@@ -314,7 +314,7 @@ public class CLI{
     }
     // cat
     private String displayFileContents(String[] args) {
-        if (args.length == 0) {
+        if (args.length != 1) {
             return decorateErrorMessage("Usage", "cat <file>");
         }
         Path file = currentDirectory.resolve(args[0]);
