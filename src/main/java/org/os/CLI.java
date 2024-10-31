@@ -3,11 +3,15 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.BiFunction;
+import java.util.ArrayList;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 public class CLI{
     private static String ERROR_MESSAGE = "An unexpceted error occured";
     private final Map<String, Function<String[], String>> commandRegistry = new HashMap<>();
-    private final Map<String, Function<String, String>> piplelineFilterRegistery = new HashMap<>();
+    private final Map<String, BiFunction<String, String, String>> piplelineFilterRegistery = new HashMap<>();
     private Path currentDirectory;
     public CLI(){
         currentDirectory = Paths.get("").toAbsolutePath();
@@ -24,6 +28,7 @@ public class CLI{
         piplelineFilterRegistery.put("less", this::paginateOutputLess);
         piplelineFilterRegistery.put("more", this::paginateOutputMore);
         piplelineFilterRegistery.put("uniq", this::getUniqe);
+        piplelineFilterRegistery.put("grep", this::filterWithPattern);
     }
     // Utillity Functions
     private static void removeLastPrintedLine(){
@@ -31,9 +36,13 @@ public class CLI{
         System.out.print("\033[2K");
         System.out.flush();
     }
-    private static String writeToFile(String fileName, String content, Boolean append){
+    public String getCurrentDirectory(){
+        return currentDirectory.toString();
+    }
+    private String writeToFile(String fileName, String content, Boolean append){
         try{
-            FileWriter writer = new FileWriter(fileName, append);
+            String filePath = Paths.get(getCurrentDirectory(), fileName).toString();
+            FileWriter writer = new FileWriter(filePath, append);
             writer.write(content);
             writer.close();
         }
@@ -46,22 +55,20 @@ public class CLI{
         return "\u001B[31mError! " + firstPart + ": \u001B[0m" +"\u001B[33m"+ secondPart +"\u001B[0m";
     }
     
-    public String getCurrentDirectory(){
-        return currentDirectory.toString();
-    }
+
     
     public String executeCommand(String commands){
         String[] tokens = commands.split("\\s+");
         ArrayList<String> modifiedTokens = new ArrayList<>();
         modifiedTokens.add("");
-        for (String token: tokens){
-            if (token.equals("|") || token.equals(">") || token.equals(">>")){
+        for (String token : tokens) {
+            if (token.equals("|") || token.equals(">") || token.equals(">>")) {
                 modifiedTokens.add(token);
                 modifiedTokens.add("");
-            }
-            else {
-                String cur = modifiedTokens.getLast() + " " + token;
-                modifiedTokens.removeLast();
+            } else {
+                // Access the last element and remove it
+                String cur = modifiedTokens.get(modifiedTokens.size() - 1) + " " + token;
+                modifiedTokens.remove(modifiedTokens.size() - 1);
                 modifiedTokens.add(cur);
             }
         }
@@ -76,6 +83,8 @@ public class CLI{
                 prevOutput = writeToFile(right, prevOutput, false);
             } else if (token.equals(">>")){
                 prevOutput = writeToFile(right, prevOutput, true);
+            }else{
+                return decorateErrorMessage("Unknown Command/s", token);
             }
         }
         return prevOutput;
@@ -95,19 +104,26 @@ public class CLI{
         }
     }
     private String applyPipelineFilter(String prevOutput, String filter){
-        Function<String, String> pipileFunction = piplelineFilterRegistery.get(filter);
+        var filteredFilter= filter.split("\\s+");
+        BiFunction<String, String, String> pipileFunction = piplelineFilterRegistery.get(filteredFilter[0]);
         if (pipileFunction == null) {
             return decorateErrorMessage("Unknown filter", filter);
         }
+        String input="";
+        if (filteredFilter[0].equals("grep")){
+            for (int i=1; i<filteredFilter.length; ++i){
+                input += filteredFilter[i]+" ";
+            }
+        }
         try {
-            return pipileFunction.apply(prevOutput);
+            return pipileFunction.apply(prevOutput,input);
         } catch (Exception e) {
             return decorateErrorMessage("Error applying filter '" + filter + "'", e.getMessage());
         }
     };
     
     // command | more
-    private String paginateOutputMore(String output) {
+    private String paginateOutputMore(String output, String dummyInput) {
         Scanner scanner = new Scanner(System.in);
         String[] lines = output.split("\n");
         int linesPerPage = 10; // Number of lines to display per page
@@ -131,11 +147,11 @@ public class CLI{
             }
             ++currentLine;
         }
-        scanner.close();
+//        scanner.close();
         return "";
     }
     // command | less
-    private String paginateOutputLess(String output){
+    private String paginateOutputLess(String output, String dummyInput){
         Scanner scanner = new Scanner(System.in);
         String[] lines = output.split("\n");
         int linesPerPage = (lines.length < 10 ? lines.length : 10);
@@ -159,17 +175,32 @@ public class CLI{
                 System.out.println(lines[currentLine++]);
             }
         }
-        scanner.close();
+//        scanner.close();
         return "";
     }
     // command | uniq
-    private String getUniqe(String ouput){
-        Set<String> distinctValues = new HashSet<>(Arrays.asList(ouput.split("\n")));
+    private String getUniqe(String output, String input){
+        Set<String> distinctValues = new HashSet<>(Arrays.asList(output.split("\n")));
         String result = "";
         for (String s: distinctValues){
-            result += s;
+            result += s+"\n";
         }
         return result;
+    }
+    // command | grep "pattern"
+    private String filterWithPattern(String input, String pattern){
+        String[] lines = input.split("\\n");
+        StringBuilder filteredLines = new StringBuilder();
+        pattern = Pattern.quote(pattern.trim());
+        Pattern regexPattern = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE);
+
+        for (String line : lines) {
+            Matcher matcher = regexPattern.matcher(line);
+            if (matcher.find()) { // Checks if the pattern exists in the line
+                filteredLines.append(line).append("\n");
+            }
+        }
+        return filteredLines.toString();
     }
     // cd
     private String changeDirectory(String[] args){
